@@ -6,7 +6,9 @@ import java.io.OutputStream;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
+import java.util.Arrays;
 
 public class Vulcaniser {
   // The Vulcan drive partition table has a magic number for recognition
@@ -73,38 +75,40 @@ public class Vulcaniser {
   private static final int VULCAN_PARTITION_LOCKED = 0x80; // Do not change
 
   // Vulcan drive types
-  /*
-     00  shown as 'DRIVE ID = $00'
-     01  'WESTERN DIGITAL 93028'  - WD93028 21MB 782/2/27 (615/4/17)
-     02  'WESTERN DIGITAL 93048'  - WD93048 48MB 782/4/27 (977/5/17)
-     03  'SWIFT'                  - CDC/Imprimis/Seagate "Swift"
-     04  'SEAGATE 125' - ST125A 25MB 615/4/17
-     05  'CONNER 3104'  - CP3104 104MB MB 1547/4/33 of 776/8/33 of 925/17/13
-     06  'QUANTUM'
-     07  'RODIME 100'
-     08  'MINISCRIBE 8051' - M8051 41MB
-     09  'WESTERN DIGITAL 93044' - WD93044A 43MB
-     0A  'CONNER 344'  - CP344 42MB
-     0B  'SEAGATE 157' - ST157A-1 45MB
-     0C  'MINISCRIBE 8225' - M8225AT 21MB
-     0D  'MINISCRIBE 8450' - M8450AT 42MB
-     0E  'CONNER 3024'  - CP3024 20MB 615/4/17
-     0F  'SWIFT 230'    - CDC (Seagate) Swift 94354-230 - 211MB  1272/9/36  (cmos 954/12/36)
-     10  'SWIFT 200'    - CDC (Seagate) Swift 94354-200 - 177MB  1072/9/36  (cmos 804/12/36)
-     11  'SWIFT 126'    - CDC (Seagate) Swift 94354-126 - 111MB  1072/7/29  (cmos 536/14/29)
-     12  'SWIFT 090'    - CDC (Seagate) Swift 90 - 79MB 536/10/29
-     13  'QUANTUM'
-     14  'MAXTOR'
-     15  'CONNER'
-     16  'MICROSCI'
-     17  'WESTERN DIGITAL AC280' - WDAC280 85MB 1082/4/39
-     18  'KYOCERA'
-     19  'KYOCERA'
-     1A  'WESTERN DIGITAL 93024' - WD93024-A 21MB 615/4/17
-     1B  'WD CAVIAR 140'  - WDAC140 42MB 1082/2/39
-     1C  'WD CAVIAR 280'  - WDAC280 80MB 1082/4/39
-     1D  'CONNER 30104'  - CP30104 120MB 762/8/39 (of 1522/4/39 of 1016/6/39)
-     Above 1D (tested 1E .. 22) gave weird result strings or errors, so not usable
+  private static final String[] VULCAN_DRIVE_TYPE_NAMES = {
+    "DRIVE ID = $00", // 00  shown as 'DRIVE ID = $00'
+    "WESTERN DIGITAL 93028", // 01  'WESTERN DIGITAL 93028'  - WD93028 21MB 782/2/27 (615/4/17)
+    "WESTERN DIGITAL 93048", // 02  'WESTERN DIGITAL 93048'  - WD93048 48MB 782/4/27 (977/5/17)
+    "SWIFT", // 03  'SWIFT'                  - CDC/Imprimis/Seagate "Swift"
+    "SEAGATE 125", // 04  'SEAGATE 125' - ST125A 25MB 615/4/17
+    "CONNER 3104", // 05  'CONNER 3104'  - CP3104 104MB MB 1547/4/33 of 776/8/33 of 925/17/13
+    "QUANTUM", // 06  'QUANTUM'
+    "RODIME 100", // 07  'RODIME 100'
+    "MINISCRIBE 8051", // 08  'MINISCRIBE 8051' - M8051 41MB
+    "WESTERN DIGITAL 93044", // 09  'WESTERN DIGITAL 93044' - WD93044A 43MB
+    "CONNER 344", // 0A  'CONNER 344'  - CP344 42MB
+    "SEAGATE 157", // 0B  'SEAGATE 157' - ST157A-1 45MB
+    "MINISCRIBE 8225", // 0C  'MINISCRIBE 8225' - M8225AT 21MB
+    "MINISCRIBE 8450", // 0D  'MINISCRIBE 8450' - M8450AT 42MB
+    "CONNER 3024", // 0E  'CONNER 3024'  - CP3024 20MB 615/4/17
+    "SWIFT 230", // 0F  'SWIFT 230'    - CDC (Seagate) Swift 94354-230 - 211MB  1272/9/36  (cmos 954/12/36)
+    "SWIFT 200", // 10  'SWIFT 200'    - CDC (Seagate) Swift 94354-200 - 177MB  1072/9/36  (cmos 804/12/36)
+    "SWIFT 126", // 11  'SWIFT 126'    - CDC (Seagate) Swift 94354-126 - 111MB  1072/7/29  (cmos 536/14/29)
+    "SWIFT 090", // 12  'SWIFT 090'    - CDC (Seagate) Swift 90 - 79MB 536/10/29
+    "QUANTUM", // 13  'QUANTUM'
+    "MAXTOR", // 14  'MAXTOR'
+    "CONNER", // 15  'CONNER'
+    "MICROSCI", // 16  'MICROSCI'
+    "WESTERN DIGITAL AC280", // 17  'WESTERN DIGITAL AC280' - WDAC280 85MB 1082/4/39
+    "KYOCERA", // 18  'KYOCERA'
+    "KYOCERA", // 19  'KYOCERA'
+    "WESTERN DIGITAL 93024", // 1A  'WESTERN DIGITAL 93024' - WD93024-A 21MB 615/4/17
+    "WD CAVIAR 140", // 1B  'WD CAVIAR 140'  - WDAC140 42MB 1082/2/39
+    "WD CAVIAR 280", // 1C  'WD CAVIAR 280'  - WDAC280 80MB 1082/4/39
+    "CONNER 30104", // 1D  'CONNER 30104'  - CP30104 120MB 762/8/39 (of 1522/4/39 of 1016/6/39)
+  };
+   /*
+     IDs above 1D (tested 1E .. 22) gave weird result strings or errors, so not usable
      The Conner 30104 seems to be one of the largest hard drive in this list
      and may have been the drive for the 100MB Vulcan Gold, and this settings works well
      when translated to 1125 cylinders/ 6 heads/ 39 sectors (as supplied by ebay seller CF card).
@@ -125,39 +129,37 @@ public class Vulcaniser {
   */
 
 
-  private final byte[] inputBuffer = new byte[8192];
-  private final byte[] outputBuffer = new byte[8192];
-  private final byte[] partTable = new byte[8192];
+  private final byte[] inputBuffer = new byte[512];
+  private final byte[] outputBuffer = new byte[512];
+  private final byte[] partTable = new byte[512];
 
-  private void readBuffer(Path inputFilePath) {
+  private void readBuffer(Path inputFilePath) throws IOException {
     System.out.println("-- Reading Vulcan CF Drive Partition Table --");
     try (InputStream inputStream = Files.newInputStream(inputFilePath)) {
       int count = inputStream.readNBytes(inputBuffer, 0, inputBuffer.length);
       System.out.printf("Read %d bytes from file %s\n\n", count, inputFilePath.getFileName());
-    } catch (IOException ex) {
-      ex.printStackTrace();
-      throw new RuntimeException(ex);
     }
   }
 
-  private void writeBuffer(Path outputFilePath) {
+  private void writeBuffer(Path outputFilePath) throws IOException {
     System.out.println("-- Writing Vulcan CF Drive Partition Table --");
     try (OutputStream outputStream = Files.newOutputStream(outputFilePath)) {
       outputStream.write(outputBuffer, 0, outputBuffer.length);
       System.out.printf("Written %d bytes to file %s\n\n", outputBuffer.length, outputFilePath.getFileName());
-    } catch (IOException ex) {
-      ex.printStackTrace();
-      throw new RuntimeException(ex);
     }
   }
 
-  private void buildPartTable() {
+  private void buildPartTable(int nrOfParts) {
+
+    if (nrOfParts > PARTITION_TABLE_ENTRY_COUNT) {
+      throw new IllegalArgumentException(String.format("ERROR: specified number of partitions greater than supported (%d): %d", PARTITION_TABLE_ENTRY_COUNT, nrOfParts));
+    }
+
     System.out.println("-- Building Vulcan CF Drive Partition Table --");
 
     // Clear partition table
-    for (int i = 0; i < partTable.length; i++) {
-      partTable[i] = 0;
-    }
+    Arrays.fill(partTable, (byte) 0);
+
     // Set magic word
     setInt16(partTable, 0x00, VULCAN_DISK_MAGIC_NUMBER);
 
@@ -218,10 +220,12 @@ public class Vulcaniser {
 
       int type = VULCAN_PARTITION_CLEAR;
       if (i == 0 || size == PRODOS_MAX_PARTITION_BLOCK_SIZE) {
-//        type = VULCAN_PARTITION_PRODOS ;
-        if (i < PRODOS_MAX_ACTIVE_PARTITION_COUNT) {
-          // Maximum of 4 ProDOS partitions can be active
-          type |= VULCAN_PARTITION_ACTIVE;
+        if (i < nrOfParts) {
+          type = VULCAN_PARTITION_PRODOS ;
+          if (i < PRODOS_MAX_ACTIVE_PARTITION_COUNT) {
+            // Maximum of 4 ProDOS partitions can be active
+            type |= VULCAN_PARTITION_ACTIVE;
+          }
         }
       }
 
@@ -277,9 +281,8 @@ public class Vulcaniser {
 
   void convertToInterleaved(byte[] partTableBuffer, byte[] interleavedOutput) {
     // Clear output buffer
-    for (int i = 0; i < interleavedOutput.length; i++) {
-      interleavedOutput[i] = 0;
-    }
+    Arrays.fill(interleavedOutput, (byte) 0);
+
     int k = 0;
     for (int i = 0; i < 256; i += 2) {
       for (int j = i; j < VULCAN_DISK_BLOCK_SIZE; j += 256) {
@@ -316,8 +319,7 @@ public class Vulcaniser {
     int a = getInt8(buf, ofs + 2);
     int b = getInt8(buf, ofs + 1);
     int c = getInt8(buf, ofs);
-    int res =  a << 16 | b << 8 | c;
-    return res;
+    return  a << 16 | b << 8 | c;
   }
 
   void setInt8(byte[] buf, int ofs, byte val) {
@@ -340,7 +342,7 @@ public class Vulcaniser {
   }
 
   String getString(byte[] buf, int ofs, int len) {
-    StringBuffer sb = new StringBuffer();
+    StringBuilder sb = new StringBuilder();
     for (int i = 0; i < len; i++) {
       char ch = (char) (buf[ofs + i] & 0x7f);
       if (ch < ' ' || ch > '~') {
@@ -360,7 +362,7 @@ public class Vulcaniser {
   }
 
   String getHexBytes(byte[] buf, int ofs, int len, boolean skip) {
-    StringBuffer sb = new StringBuffer();
+    StringBuilder sb = new StringBuilder();
     for (int i = 0; i < len; i++) {
       int b = (buf[ofs + i] & 0xff);
       String hex = String.format("0x%02X", b);
@@ -375,7 +377,6 @@ public class Vulcaniser {
     }
     return sb.toString();
   }
-
 
   private void analyseBuffer() {
     System.out.println("-- Analysing Vulcan CF Drive Partition Table --");
@@ -397,6 +398,9 @@ public class Vulcaniser {
     System.out.printf("\nofs: 0x%02X size: 0x%02X  ", ofs, step);
     magic = getInt16(partTable, ofs);
     System.out.printf("magic: 0x%04X", magic);
+    if (magic == VULCAN_DISK_MAGIC_NUMBER) {
+      System.out.printf(" ('Applied Engineering')");
+    }
     ofs += step;
 
     // 16-bit Checksum number
@@ -409,7 +413,11 @@ public class Vulcaniser {
     // 8-bit drive type code, 0x00 for '20M' drive, 0x1D for 'CONNER 30104' drive
     step = 1;
     System.out.printf("\nofs: 0x%02X size: 0x%02X  ", ofs, step);
-    System.out.printf("drv-id: 0x%02X (%d)", getInt8(partTable, ofs), getInt8(partTable, ofs));
+    int driveId = getInt8(partTable, ofs);
+    System.out.printf("drv-id: 0x%02X (%d)", driveId, driveId);
+    if (driveId <  VULCAN_DRIVE_TYPE_NAMES.length) {
+      System.out.printf(" ('" + VULCAN_DRIVE_TYPE_NAMES[driveId] + "')");
+    }
     ofs += step;
 
     // 24-bit total drive total block count
@@ -662,7 +670,7 @@ public class Vulcaniser {
     // Check if checksum is as expected
     int checkedsum = calculateCheckSum();
     if (checksum != checkedsum) {
-      System.out.printf("\nWARNING: expected checksum == checkedsum: 0x%04X 0x%04X", checksum, checkedsum);
+      //System.out.printf("\nWARNING: expected checksum == checkedsum: 0x%04X 0x%04X", checksum, checkedsum);
     }
 
     // Check that counted blocks size is same as registered total block size
@@ -680,63 +688,97 @@ public class Vulcaniser {
   /*
     This checksum calculation is taken from example C code 'part_vulcan.c', but
     probably not correct because it does not match checksums created by partition table changes.
-    However it seems that Vulcan Gold partition table manager does not check these.
+    However, it seems that Vulcan Gold partition table manager does not check these.
    */
   private int calculateCheckSum() {
     byte cksumb0 = 0;
     byte cksumb1 = 0;
-    for (int i = 0; i < VULCAN_DISK_BLOCK_SIZE; i += 2) {
+    for (int i = 4; i < VULCAN_DISK_BLOCK_SIZE; i += 2) {
       // Skip checksum in calculation ?
       if (i == 0x02) {
-        continue;
+        cksumb0 ^= 0xFF;
+        cksumb1 ^= 0xFF;
+      } else {
+        cksumb0 ^= partTable[i + 1];
+        cksumb1 ^= partTable[i];
       }
-      cksumb0 ^= partTable[i];
-      cksumb1 ^= partTable[i+1];
     }
-    return (((int) cksumb1) & 0xff) << 8 | (int) cksumb0 & 0xff;
+
+    int cksum = (((int) cksumb1) & 0xff) << 8 | (int) cksumb0 & 0xff;
+    cksum = 0xFFFF - cksum;
+    cksum &= 0xFFFF;
+    return cksum;
   }
 
+  private void analysePartitionImage(Path inputFilePath) {
 
-  private void run(Path workDirPath ) {
-    //Path inputFilePath = workDirPath.resolve("transcend256mb_test3.img");
-    //Path inputFilePath = workDirPath.resolve("transcend256mb.img");
-    //Path inputFilePath = workDirPath.resolve("apacer1gb_check2.img");
-    //Path inputFilePath = workDirPath.resolve("transcend1gb_vulcan.img");
-    Path inputFilePath = workDirPath.resolve("vulcan_cf5.img");
+    try {
+      readBuffer(inputFilePath);
+    } catch (NoSuchFileException e) {
+      System.err.println("ERROR: Path not found: " + inputFilePath);
+      return;
+    } catch (IOException ex) {
+      ex.printStackTrace();
+      return;
+    }
 
-    //Path inputFilePath = workDirPath.resolve("cf16mbvulcan_lexar.img");
-
-    Path outputFilePath = workDirPath.resolve("vulcan_part.img");
-
-    readBuffer(inputFilePath);
     convertFromInterleaved(inputBuffer, partTable);
-
-    convertToInterleaved(partTable, outputBuffer);
-    convertFromInterleaved(outputBuffer, partTable);
-
     analyseBuffer();
+  }
 
-    buildPartTable();
-
-    convertToInterleaved(partTable, outputBuffer);
-    convertFromInterleaved(outputBuffer, partTable);
-
-    analyseBuffer();
-
-    writeBuffer(outputFilePath);
-
-    readBuffer(outputFilePath);
-    convertFromInterleaved(inputBuffer, partTable);
+  private void buildPartitionImage(Path outputFilePath, int nrOfParts) {
+    buildPartTable(nrOfParts);
     convertToInterleaved(partTable, outputBuffer);
     convertFromInterleaved(outputBuffer, partTable);
     analyseBuffer();
 
+    try {
+      writeBuffer(outputFilePath);
+    } catch (NoSuchFileException e) {
+      System.err.println("ERROR: Path not found: " + outputFilePath);
+    } catch (IOException ex) {
+      ex.printStackTrace();
+    }
   }
 
   public static void main(String[] args) {
 
-    //Path userHomeDir = Path.of(System.getProperty("user.home"));
-    Path userHomeDir = Path.of("d:/projects/");
-    new Vulcaniser().run(userHomeDir.resolve("vulcan"));
+    if (args.length < 2) {
+      System.out.println("Insufficient arguments provided.");
+      displayHelp();
+      return;
+    }
+
+    String command = args[0];
+    String fileName = args[1];
+
+    Path userDir = Path.of(System.getProperty("user.dir"));
+
+    if (command.equalsIgnoreCase("analyse")) {
+      new Vulcaniser().analysePartitionImage(userDir.resolve(fileName));
+      return;
+    }
+
+    if (command.equalsIgnoreCase("build")) {
+      int nrOfParts = args.length <= 2 ? VULCAN_CF_PRODOS_PARTITION_COUNT : Integer.parseInt(args[2]) ;
+      new Vulcaniser().buildPartitionImage(userDir.resolve(fileName), nrOfParts);
+      return;
+    }
+
+    displayHelp();
+  }
+
+  private static void displayHelp() {
+    System.out.println("To analyse a Vulcan partition table image file use:");
+    System.out.println("    analyse <filename>");
+    System.out.println("  For example:");
+    System.out.println("    analyse my_vulcan_part.img");
+    System.out.println("To build a Vulcan partition table image file use: ");
+    System.out.println("    build <filename> [<number-of-partitions>]");
+    System.out.println("  For example:");
+    System.out.println("    build my_vulcan_part.img");
+    System.out.println("    build my_vulcan_part.img 4");
+    System.out.println("    build my_vulcan_part.img 5");
+    System.out.println("");
   }
 }
